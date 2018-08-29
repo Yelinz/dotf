@@ -1,6 +1,6 @@
-#Dotfiles
+# Dotfiles
 
-##VIM
+## VIM
 
 Needs [VIMPlug](https://github.com/junegunn/vim-plug).
 
