@@ -10,6 +10,7 @@ Plug 'prettier/vim-prettier', {
     \ 'for': ['javascript', 'typescript', 'css', 'less', 'scss'] }
 Plug 'ctrlpvim/ctrlp.vim'
 Plug 'scrooloose/nerdcommenter'
+Plug 'Valloric/YouCompleteMe'
 call plug#end()
 
 "Basic Sets
@@ -33,18 +34,8 @@ command Wq wq
 command Qt tabclose
 map <F2> :wa <CR>
 inoremap <F2> <C-o>:wa<CR>
-
-"Unmap control keys
-noremap <Up> <NOP>
-noremap <Down> <NOP>
-noremap <Left> <NOP>
-noremap <Right> <NOP>
-noremap <Insert> <NOP>
-noremap <Delete> <NOP>
-noremap <Home> <NOP>
-noremap <End> <NOP>
-noremap <PageUp> <NOP>
-noremap <PageDown> <NOP>
+"replace currently selected text with default register without yanking it
+vnoremap p "_dP
 
 "Highlight Trailing spaces
 highlight SpecialKey guifg=#444444 ctermfg=206
