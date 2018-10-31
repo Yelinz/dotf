@@ -9,5 +9,6 @@ Needs [VIMPlug](https://github.com/junegunn/vim-plug).
 Do :PlugInstall in VIM
 
 Uses [YCM](https://github.com/Valloric/YouCompleteMe)
-
-Go to ```~/.vim/plugged/YouCompleteMe``` and do ```python3 install.py```.
+1. ```cd ~/.vim/plugged/YouCompleteMe```
+2. ```sudo apt install build-essential cmake python3-dev``` 
+3. ```python3 install.py```
