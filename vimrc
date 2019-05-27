@@ -11,6 +11,9 @@ Plug 'prettier/vim-prettier', {
 Plug 'ctrlpvim/ctrlp.vim'
 Plug 'scrooloose/nerdcommenter'
 Plug 'Valloric/YouCompleteMe'
+Plug 'ambv/black'
+Plug 'tpope/vim-fugitive'
+Plug 'jparise/vim-graphql'
 call plug#end()
 
 "Basic Sets
@@ -23,12 +26,13 @@ set number
 set mouse=a
 set ttymouse=sgr
 set hlsearch
+set nowrap
 "Disables a sound on esc press when in command mode
 set noeb vb t_vb=
 
 "Quality of life remaps
-command W w
-command Q q
+command W w 
+command Q q 
 command Wa wa
 command Wq wq
 command Qt tabclose
@@ -46,22 +50,16 @@ let mapleader="ö"
 map <leader>f :NERDTreeFind<cr>
 map <leader>t :NERDTreeToggle<cr>
 
-"Prettier
-let g:prettier#autoformat = 0
-autocmd BufWritePre *.js,*.css,*.scss,*.less PrettierAsync
-
 "Ctrl P
-set wildignore+=*/tmp/*,*/node_modules/*,*/dist/*,*.so,*.swp,*.zip
+set wildignore+=*/tmp/*,*/node_modules/*,*/dist/*,*.so,*.swp,*.zip,*.min*,*/php/library/*
 
 "---Python---
-"syntastic: check python for errors on save
-let g:syntastic_python_checkers = ['flake8']
-let g:syntastic_always_populate_loc_list = 1
-let g:syntastic_aggregate_errors = 1
-let g:syntastic_auto_loc_list = 1
-let g:syntastic_check_on_open = 1
-let g:syntastic_check_on_wq = 0
-let g:syntastic_python_flake8_args ='--doctests --ignore=E221,E222,E251,E272,E241,E203,D100,D101,D102,D103,D104,D105,D106,D107'
+"Black config
+autocmd BufWritePre *.py Black
 
 "Set Tabs to 4 spaces in python
 autocmd Filetype py setlocal tabstop=4
+
+
+"---PHP---
+autocmd Filetype php setlocal noexpandtab
