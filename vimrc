@@ -2,12 +2,8 @@
 "Plugin Manager
 call plug#begin('~/.vim/plugged')
 Plug 'scrooloose/nerdtree'
-Plug 'nvie/vim-flake8'
-Plug 'vim-syntastic/syntastic'
 Plug 'joukevandermaas/vim-ember-hbs'
-Plug 'prettier/vim-prettier', {
-    \ 'do': 'npm install',
-    \ 'for': ['javascript', 'typescript', 'css', 'less', 'scss'] }
+Plug 'w0rp/ale'
 Plug 'ctrlpvim/ctrlp.vim'
 Plug 'scrooloose/nerdcommenter'
 Plug 'Valloric/YouCompleteMe'
@@ -59,7 +55,3 @@ autocmd BufWritePre *.py Black
 
 "Set Tabs to 4 spaces in python
 autocmd Filetype py setlocal tabstop=4
-
-
-"---PHP---
-autocmd Filetype php setlocal noexpandtab
