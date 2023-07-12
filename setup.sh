@@ -9,10 +9,14 @@ read -p 'Email: ' email
 sudo apt-get install git curl libfuse2 ripgrep ca-certificates gnupg
 
 # nvim setup
-
+curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
+chmod u+x nvim.appimage
+mkdir tools/appimages
+mv nvim.appimage tools/appimages
+ln -s # todo add to bin and path
 
 # git setup
-git config --global core.editor "vim"
+git config --global core.editor "nvim"
 git config --global user.name "Yelin Zhang"
 git config --global user.email $email
 
@@ -35,3 +39,5 @@ sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin 
 curl -sSL https://install.python-poetry.org | python3 -
 poetry completions fish > ~/.config/fish/completions/poetry.fish
 set PATH $PATH /home/yz/.local/bin
+
+# todo add fish and bash path to fish
