@@ -1,0 +1,22 @@
+[user]
+	name = yelinz
+[core]
+	editor = vim
+[alias]
+	c = commit
+	ca = commit -a
+	caa = commit -a --amend
+	caan = commit -a --amend --no-edit
+	p = push
+	pf = push -f
+	puu = push -u origin HEAD
+	co = checkout
+	cb = checkout -b
+	cob = checkout -b
+	com = checkout main
+	pum = pull upstream main
+	fum = fetch upstream main:main
+[pull]
+	rebase = true
+[init]
+	defaultBranch = main
