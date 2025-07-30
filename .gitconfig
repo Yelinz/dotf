@@ -1,6 +1,10 @@
 [user]
-	email = 30687616+Yelinz@users.noreply.github.com
 	name = yelinz
+[includeIf "hasconfig:remote.*.url:git@github.com:**/**"]
+    path = gitconfig-github
+[includeIf "hasconfig:remote.*.url:https://github.com/**/**"]
+    path = gitconfig-github
+
 [core]
 	editor = vim
 [alias]
