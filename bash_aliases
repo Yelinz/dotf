@@ -17,13 +17,20 @@ alias gcaanpf="gcaan && gpf"
 alias gcom='git checkout master'
 alias gcob='git checkout -b'
 
-# aliases for retarded me
+# vim
 alias :q='exit'
 
 # python 2 to 3
 alias python='python3'
 alias pip='pip3'
 
-alias dc="docker-compose"
+# docker
+alias docker-compose="docker compose"
+alias dc="docker compose"
+alias docker stap="docker stop $(docker ps -a -q)"
 
 alias ps="pipenv shell"
+
+alias pnpm="corepack pnpm"
+alias npm="corepack npm"
+alias yarn="corepack yarn"
