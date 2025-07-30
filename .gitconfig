@@ -7,6 +7,7 @@
 	c = commit
 	ca = commit -a
 	caa = commit -a --amend
+	cam = commit --amend
 	caan = commit -a --amend --no-edit
 	p = push
 	pf = push --force-with-lease
@@ -23,8 +24,6 @@
 	defaultBranch = main
 [rerere]
 	enabled = true
-[maintenance]
-	repo = /home/yz/repos/camac-ng
 [column]
 	ui = auto
 [branch]
