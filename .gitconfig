@@ -1,10 +1,5 @@
 [user]
 	name = yelinz
-[includeIf "hasconfig:remote.*.url:git@github.com:**/**"]
-    path = gitconfig-github
-[includeIf "hasconfig:remote.*.url:https://github.com/**/**"]
-    path = gitconfig-github
-
 [core]
 	editor = vim
 [alias]
@@ -32,3 +27,9 @@
 	ui = auto
 [branch]
 	sort = -committerdate
+
+# git version 2.36 required
+[includeIf "hasconfig:remote.*.url:git@github.com:**/**"]
+    path = gitconfig-github
+[includeIf "hasconfig:remote.*.url:https://github.com/**/**"]
+    path = gitconfig-github
