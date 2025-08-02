@@ -1,7 +1,7 @@
 [user]
-	name = yelinz
+	name = Yelin Zhang
 [core]
-	editor = vim
+	editor = nvim
 [alias]
 	c = commit
 	ca = commit -a
