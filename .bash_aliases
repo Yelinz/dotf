@@ -19,6 +19,9 @@ alias gcob='git checkout -b'
 
 # vim
 alias :q='exit'
+alias v='nvim'
+alias vi='nvim'
+alias vim='nvim'
 
 # python 2 to 3
 alias python='python3'
