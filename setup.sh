@@ -2,8 +2,6 @@
 cd ~
 mkdir repos tools
 
-read -p 'Email: ' email 
-
 # general dependencies
 # libfuse2 is for appimages
 sudo apt-get install git curl libfuse2 ripgrep ca-certificates gnupg
@@ -14,11 +12,6 @@ chmod u+x nvim.appimage
 mkdir tools/appimages
 mv nvim.appimage tools/appimages
 ln -s # todo add to bin and path
-
-# git setup
-git config --global core.editor "nvim"
-git config --global user.name "Yelin Zhang"
-git config --global user.email $email
 
 # node
 curl -L https://bit.ly/n-install | N_PREFIX=~/tools/n bash -s -- -y
