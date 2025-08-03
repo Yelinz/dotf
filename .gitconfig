@@ -19,6 +19,8 @@
 	fum = fetch upstream main:main
 [pull]
 	rebase = true
+[push]
+        autoSetupRemote = true
 [init]
 	defaultBranch = main
 [rerere]
