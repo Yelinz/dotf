@@ -32,6 +32,6 @@
 
 # git version 2.36 required
 [includeIf "hasconfig:remote.*.url:git@github.com:**/**"]
-    path = gitconfig-github
+    path = .gitconfig-github
 [includeIf "hasconfig:remote.*.url:https://github.com/**/**"]
-    path = gitconfig-github
+    path = .gitconfig-github
