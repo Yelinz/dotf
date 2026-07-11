@@ -4,7 +4,12 @@ mkdir repos tools
 
 # general dependencies
 # libfuse2 is for appimages
-sudo apt-get install git curl libfuse2 ripgrep ca-certificates gnupg
+sudo apt-get install git curl libfuse2 ripgrep ca-certificates gnupg unzip fontconfig jq gsimplecal locales
+
+# locale for Monday-first week in Waybar clock
+if ! locale -a | grep -qi '^en_GB\.utf8$'; then
+  sudo localedef -i en_GB -f UTF-8 en_GB.UTF-8 || true
+fi
 
 # nvim setup
 curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage

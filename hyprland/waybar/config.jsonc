@@ -1,0 +1,119 @@
+{
+    "name": "desktop",
+    "layer": "top",
+    "position": "top",
+    "height": 34,
+    "spacing": 4,
+    "margin-top": 0,
+    "margin-left": 0,
+    "margin-right": 0,
+    "reload_style_on_change": true,
+
+    "modules-left": [
+        "hyprland/workspaces"
+    ],
+    "modules-center": [
+        "clock"
+    ],
+    "modules-right": [
+        "network",
+        "pulseaudio",
+        "cpu",
+        "memory",
+        "tray",
+        "custom/power"
+    ],
+
+    "hyprland/workspaces": {
+        "all-outputs": false,
+        "show-special": false,
+        "disable-scroll": false,
+        "move-to-monitor": true,
+        "sort-by": "number",
+        "format": "{name}",
+        "persistent-workspaces": {
+            "HDMI-A-1": [
+                1,
+                2
+            ],
+            "DP-2": [
+                3,
+                4
+            ]
+        },
+        "on-scroll-up": "hyprctl dispatch workspace e+1",
+        "on-scroll-down": "hyprctl dispatch workspace e-1"
+    },
+
+    "clock": {
+        "interval": 1,
+        "locale": "en_GB.UTF-8",
+        "format": "{:%A, %Y-%m-%d - %H:%M:%S}",
+        "tooltip-format": "<tt>{calendar}</tt>",
+        "calendar": {
+            "mode": "month",
+            "weeks-pos": "left",
+            "on-scroll": 1,
+            "format": {
+                "months": "<span color='#89b4fa'><b>{}</b></span>",
+                "days": "<span color='#e6e9ef'><b>{}</b></span>",
+                "weeks": "<span color='#9aa0b5'><b>W{}</b></span>",
+                "weekdays": "<span color='#94e2d5'><b>{}</b></span>",
+                "today": "<span color='#11111b' background='#89b4fa'><b>{}</b></span>"
+            }
+        },
+        "actions": {
+            "on-scroll-up": "shift_up",
+            "on-scroll-down": "shift_down"
+        }
+    },
+
+    "cpu": {
+        "interval": 3,
+        "format": " {usage}%"
+    },
+
+    "memory": {
+        "interval": 5,
+        "format": " {}%",
+        "tooltip-format": "{used:0.1f}G / {total:0.1f}G"
+    },
+
+    "network": {
+        "format-wifi": "",
+        "format-ethernet": "󰈀",
+        "format-linked": "󱘖",
+        "format-disconnected": "󰖪",
+        "tooltip": false
+    },
+
+    "pulseaudio": {
+        "scroll-step": 2,
+        "format": "{icon} {volume}%",
+        "format-muted": "󰝟 muted",
+        "format-icons": {
+            "default": [
+                "",
+                "",
+                ""
+            ]
+        },
+        "on-click": "pavucontrol"
+    },
+
+    "tray": {
+        "spacing": 8
+    },
+
+    "custom/power": {
+        "format": "⏻",
+        "tooltip": false,
+        "menu": "on-click",
+        "menu-file": "$HOME/.config/waybar/power_menu.xml",
+        "menu-actions": {
+            "suspend": "systemctl suspend",
+            "restart": "systemctl reboot",
+            "shutdown": "systemctl poweroff"
+        }
+    }
+}
