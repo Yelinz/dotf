@@ -1,0 +1,17 @@
+# Login-shell environment shared by Bash on Linux and macOS.
+
+if [ -n "${BASH_VERSION:-}" ] && [ -f "$HOME/.bashrc" ]; then
+  . "$HOME/.bashrc"
+fi
+
+for path in "$HOME/bin" "$HOME/.local/bin" "$HOME/tools/bin"; do
+  if [ -d "$path" ]; then
+    PATH="$path:$PATH"
+  fi
+done
+
+export PATH
+
+if [ -f "$HOME/.cargo/env" ]; then
+  . "$HOME/.cargo/env"
+fi

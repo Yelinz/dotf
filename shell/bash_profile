@@ -1,0 +1,5 @@
+# macOS login shells use ~/.bash_profile. Keep it tiny and delegate to profile.
+
+if [ -f "$HOME/.profile" ]; then
+  . "$HOME/.profile"
+fi

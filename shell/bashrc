@@ -1,0 +1,87 @@
+# Only run the interactive setup for interactive shells.
+case $- in
+  *i*) ;;
+  *) return ;;
+esac
+
+HISTCONTROL=ignoreboth
+shopt -s histappend checkwinsize
+HISTSIZE=1000
+HISTFILESIZE=2000
+
+export EDITOR=nvim
+export VISUAL=nvim
+
+if [[ -n "${TERM:-}" ]]; then
+  case "$TERM" in
+    xterm-color|*-256color)
+      color_prompt=yes
+      ;;
+  esac
+fi
+
+if [[ -n "${color_prompt:-}" ]]; then
+  PS1='\[\e[01;32m\]\u@\h\[\e[00m\]:\[\e[01;34m\]\w\[\e[00m\]\$ '
+else
+  PS1='\u@\h:\w\$ '
+fi
+
+if [[ -x /usr/bin/dircolors ]]; then
+  if [[ -r "$HOME/.dircolors" ]]; then
+    eval "$(dircolors -b "$HOME/.dircolors")"
+  else
+    eval "$(dircolors -b)"
+  fi
+
+  alias ls='ls --color=auto'
+  alias grep='grep --color=auto'
+  alias fgrep='fgrep --color=auto'
+  alias egrep='egrep --color=auto'
+fi
+
+[[ -f "$HOME/.bash_aliases" ]] && . "$HOME/.bash_aliases"
+
+export N_PREFIX="$HOME/tools/n"
+[[ :$PATH: == *":$N_PREFIX/bin:"* ]] || PATH="$N_PREFIX/bin:$PATH"
+
+case "$(uname -s)" in
+  Darwin)
+    if command -v brew >/dev/null 2>&1; then
+      eval "$(brew shellenv)"
+    fi
+    ;;
+  Linux)
+    if [[ -x "$HOME/anaconda3/bin/conda" ]]; then
+      __conda_setup="$($HOME/anaconda3/bin/conda shell.bash hook 2>/dev/null)"
+      if [[ $? -eq 0 ]]; then
+        eval "$__conda_setup"
+      else
+        if [[ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]]; then
+          . "$HOME/anaconda3/etc/profile.d/conda.sh"
+        else
+          PATH="$HOME/anaconda3/bin:$PATH"
+        fi
+      fi
+      unset __conda_setup
+    fi
+
+    [[ -f "$HOME/.cargo/env" ]] && . "$HOME/.cargo/env"
+
+    [[ -d "$HOME/.modular/pkg/packages.modular.com_mojo/bin" ]] && PATH="$HOME/.modular/pkg/packages.modular.com_mojo/bin:$PATH"
+
+    export BUN_INSTALL="$HOME/.bun"
+    [[ -d "$BUN_INSTALL/bin" ]] && PATH="$BUN_INSTALL/bin:$PATH"
+
+    export SDKMAN_DIR="$HOME/.sdkman"
+    [[ -s "$SDKMAN_DIR/bin/sdkman-init.sh" ]] && . "$SDKMAN_DIR/bin/sdkman-init.sh"
+
+    if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+      export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-agent.socket"
+      if [[ ! -S "$SSH_AUTH_SOCK" ]]; then
+        eval "$(ssh-agent -a "$SSH_AUTH_SOCK" -t 1h -s)" >/dev/null
+      fi
+    fi
+    ;;
+esac
+
+export PATH

@@ -6,7 +6,7 @@ This folder keeps your Waybar + Hyprland desktop customization in the repo and l
 
 - `hypr/hyprland.conf` — your tracked Hyprland main config
 - `tools/hypr-window-swap.sh` — custom workspace/window swap helper (uses temporary workspace `999`)
-- `waybar/config.jsonc` — desktop-first Waybar layout and module config
+- `waybar/config` — desktop-first Waybar layout and module config
 - `waybar/style.css` — modern dark style with rounded module blocks
 - `waybar/power_menu.xml` — GTK menu descriptor for power dropdown
 - `hypr/conf.d/waybar-desktop.conf` — Hyprland include for Waybar startup and layer blur rules
@@ -24,7 +24,7 @@ From the repo root:
 3. Reload Hyprland:
    - `hyprctl reload`
 4. Restart Waybar (if needed):
-   - `pkill waybar && waybar`
+   - `pkill waybar && waybar -b desktop -c ~/.config/waybar/config -s ~/.config/waybar/style.css`
 
 After linking, editing files in this repo updates your live config immediately (because the system paths are symlinks).
 
@@ -35,6 +35,6 @@ The installer also links `tools/hypr-window-swap.sh` to `~/tools/hypr-window-swa
 - The bar is tuned for desktop usage (no battery/backlight modules).
 - The rightmost module is a power dropdown with Suspend/Restart/Shutdown.
 - Icons require Nerd Fonts (installed by `install-fonts.sh`).
-- Clock uses `en_GB.UTF-8` locale so week starts on Monday.
+- Clock uses `en_US.utf8` locale so it works on systems with the default installed locales.
 - Clock hover shows a highlighted month calendar.
 - Optional blur rules are included for Waybar's layer namespace.

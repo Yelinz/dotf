@@ -47,7 +47,7 @@
 
     "clock": {
         "interval": 1,
-        "locale": "en_GB.UTF-8",
+        "locale": "en_US.utf8",
         "format": "{:%A, %Y-%m-%d - %H:%M:%S}",
         "tooltip-format": "<tt>{calendar}</tt>",
         "calendar": {

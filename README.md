@@ -1,18 +1,64 @@
 # Dotfiles
 
-Personal config.
+Personal config, checked into one place with symlinks for the live files.
 
-## Hyprland + Waybar (desktop profile)
+## What lives here
 
-This repo now includes a desktop-focused Waybar setup and a Hyprland snippet in `hyprland/`.
+### Shell
 
-- `hyprland/hypr/hyprland.conf` — tracked Hyprland main config
-- `hyprland/tools/hypr-window-swap.sh` — vendored custom workspace swap helper script
-- `hyprland/waybar/config.jsonc` — Waybar module layout (desktop-first, no laptop battery/backlight modules)
-- `hyprland/waybar/style.css` — modern dark aesthetic (Catppuccin-inspired)
-- `hyprland/waybar/power_menu.xml` — power dropdown menu descriptor
-- `hyprland/hypr/conf.d/waybar-desktop.conf` — Hyprland include for launching Waybar + blur layer rules
-- `hyprland/install-links.sh` — creates symlinks from `~/.config` to this repo so edits here immediately propagate to your system
-- `hyprland/install-fonts.sh` — installs Nerd Fonts needed for Waybar icons
+- `shell/bashrc` — interactive Bash config
+- `shell/profile` — login-shell environment setup
+- `shell/bash_profile` — macOS-friendly Bash login entrypoint
+- `shell/bash_aliases` — shell aliases and shortcuts
 
-See `hyprland/README.md` for install and usage instructions.
+### Editors
+
+- `nvim/init.lua` — Neovim configuration
+- `nvim/lazy-lock.json` — pinned Neovim plugin versions
+- `emacs/doom/init.el` — Doom module selection
+- `emacs/doom/config.el` — Doom personal settings
+- `emacs/doom/packages.el` — Doom package overrides
+- `emacs/.doomrc` — Doom repo/runtime customization
+
+### Desktop
+
+- `hyprland/` — Hyprland + Waybar desktop profile
+
+## Setup
+
+Run the top-level setup script from the repo root:
+
+- `./setup.sh` — detects Linux vs macOS and delegates to the right installer
+
+For future refreshes after pulling repo changes:
+
+- `./update.sh` — refresh the repo checkout if clean, then re-run the setup/link step
+
+The platform installers do two things:
+
+1. install the small set of baseline packages used by the configs
+2. create safe symlinks from the standard config locations back into this repo
+
+### Symlinked paths
+
+- `~/.bashrc`
+- `~/.profile`
+- `~/.bash_profile`
+- `~/.bash_aliases`
+- `~/.config/nvim/init.lua`
+- `~/.config/nvim/lazy-lock.json`
+- `~/.config/doom/init.el`
+- `~/.config/doom/config.el`
+- `~/.config/doom/packages.el`
+- `~/.config/emacs/.doomrc`
+
+If a live file already exists, the installer backs it up to `~/.config/dotf-backups/` first.
+
+## Hyprland + Waybar
+
+The desktop profile still lives in `hyprland/` and has its own installer:
+
+- `hyprland/install-links.sh` — symlinks the Waybar/Hyprland config
+- `hyprland/install-fonts.sh` — installs Nerd Fonts for the bar icons
+
+See `hyprland/README.md` for the desktop-specific details.
