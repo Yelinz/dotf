@@ -70,7 +70,6 @@ The platform installers do three things:
 - `~/.config/doom/init.el`
 - `~/.config/doom/config.el`
 - `~/.config/doom/packages.el`
-- `~/.config/emacs/.doomrc`
 
 If a live file already exists, the installer backs it up to `~/.config/dotf-backups/` first.
 

@@ -118,5 +118,4 @@ link_core_configs() {
   link_path "$root/emacs/doom/init.el" "$HOME/.config/doom/init.el"
   link_path "$root/emacs/doom/config.el" "$HOME/.config/doom/config.el"
   link_path "$root/emacs/doom/packages.el" "$HOME/.config/doom/packages.el"
-  link_path "$root/emacs/.doomrc" "$HOME/.config/emacs/.doomrc"
 }

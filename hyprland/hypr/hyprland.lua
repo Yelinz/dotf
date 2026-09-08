@@ -200,6 +200,9 @@ local mainMod = "SUPER" -- Sets "Windows" key as main modifier
 --
 -- window control
 hl.bind(mainMod .. " + Q", hl.dsp.window.close())
+-- close() only sends a polite close request, which a hung or half-started
+-- client can ignore; kill() forces it down.
+hl.bind(mainMod .. " + SHIFT + Q", hl.dsp.window.kill())
 -- hl.bind(mainMod .. " + M", hl.dsp.exit())
 hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))
 -- hl.bind(mainMod .. " + P", hl.dsp.window.pseudo()) -- dwindle
