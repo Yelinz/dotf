@@ -4,12 +4,13 @@ This folder keeps your Waybar + Hyprland desktop customization in the repo and l
 
 ## What is included
 
-- `hypr/hyprland.conf` — your tracked Hyprland main config
+- `hypr/hyprland.lua` — your tracked Hyprland main config (Lua; hyprlang is deprecated since Hyprland 0.55)
 - `tools/hypr-window-swap.sh` — custom workspace/window swap helper (uses temporary workspace `999`)
 - `waybar/config` — desktop-first Waybar layout and module config
 - `waybar/style.css` — modern dark style with rounded module blocks
 - `waybar/power_menu.xml` — GTK menu descriptor for power dropdown
-- `hypr/conf.d/waybar-desktop.conf` — Hyprland include for Waybar startup and layer blur rules
+- `hypr/waybar-desktop.lua` — Hyprland module for Waybar startup and layer blur rules
+- `hypr/hyprland.conf`, `hypr/conf.d/waybar-desktop.conf` — legacy hyprlang configs, kept for reference (no longer linked)
 - `install-links.sh` — symlink installer (safe backups for existing files)
 - `install-fonts.sh` — installs Nerd Fonts needed for Waybar icons
 
@@ -23,6 +24,9 @@ From the repo root:
    - `./hyprland/install-fonts.sh`
 3. Reload Hyprland:
    - `hyprctl reload`
+   - Note: the config file is picked at startup, so switching between the legacy
+     `.conf` and the Lua config requires a full Hyprland restart (log out/in),
+     not just a reload.
 4. Restart Waybar (if needed):
    - `pkill waybar && waybar -b desktop -c ~/.config/waybar/config -s ~/.config/waybar/style.css`
 

@@ -41,8 +41,8 @@ link_path() {
 }
 
 link_path "$REPO_DIR/waybar" "$CONFIG_HOME/waybar"
-link_path "$REPO_DIR/hypr/hyprland.conf" "$CONFIG_HOME/hypr/hyprland.conf"
-link_path "$REPO_DIR/hypr/conf.d/waybar-desktop.conf" "$CONFIG_HOME/hypr/conf.d/waybar-desktop.conf"
+link_path "$REPO_DIR/hypr/hyprland.lua" "$CONFIG_HOME/hypr/hyprland.lua"
+link_path "$REPO_DIR/hypr/waybar-desktop.lua" "$CONFIG_HOME/hypr/waybar-desktop.lua"
 
 chmod +x "$REPO_DIR/tools/hypr-window-swap.sh"
 link_path "$REPO_DIR/tools/hypr-window-swap.sh" "$TOOLS_HOME/hypr-window-swap.sh"
