@@ -24,6 +24,23 @@ Personal config, checked into one place with symlinks for the live files.
 
 - `hyprland/` — Hyprland + Waybar desktop profile
 
+### System
+
+- `system/` — files installed to the same path under `/` (e.g.
+  `system/etc/NetworkManager/conf.d/50-wol.conf` → `/etc/NetworkManager/conf.d/50-wol.conf`).
+  This is the Nix-flavored part of the repo: edit the file here, run `./setup.sh`,
+  and the machine converges to what's checked in. Units under `etc/systemd/system/`
+  are also enabled automatically. Currently:
+  - `etc/NetworkManager/conf.d/50-wol.conf` — enable Wake-on-LAN (magic packet) on wired NICs
+  - `etc/systemd/system/rclone-homelab.service` — mount homelab WebDAV at `/mnt/homelab`
+  - `etc/systemd/system/rclone-proton-drive.service` — mount Proton Drive at `/mnt/protondrive`
+  - `etc/tmpfiles.d/dotf.conf` — create the rclone mount points
+  - `etc/modprobe.d/nvidia.conf` — nvidia DRM kernel modesetting
+  - `etc/X11/xorg.conf.d/00-keyboard.conf` — keyboard layout (as written by localectl)
+
+  The rclone units need remotes configured in `~/.config/rclone/rclone.conf`, which
+  holds credentials and is deliberately **not** checked in.
+
 ## Setup
 
 Run the top-level setup script from the repo root:
@@ -34,10 +51,13 @@ For future refreshes after pulling repo changes:
 
 - `./update.sh` — refresh the repo checkout if clean, then re-run the setup/link step
 
-The platform installers do two things:
+The platform installers do three things:
 
 1. install the small set of baseline packages used by the configs
 2. create safe symlinks from the standard config locations back into this repo
+3. (Linux) sync `system/` into `/` with sudo — only files whose content differs are
+   reinstalled — then apply anything that needs a live kick (reload NetworkManager
+   config, enable Wake-on-LAN on the NIC via ethtool)
 
 ### Symlinked paths
 

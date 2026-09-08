@@ -41,6 +41,68 @@ link_path() {
   echo "[link] $target_path -> $source_path"
 }
 
+apply_system_files() {
+  local root src dest unit
+  local nm_changed=0 systemd_changed=0 tmpfiles_changed=0
+  root="$(repo_root)"
+  [[ -d "$root/system" ]] || return 0
+
+  echo "==> Applying system files from system/ (sudo)"
+  while IFS= read -r -d '' src; do
+    dest="${src#"$root/system"}"
+    if sudo cmp -s "$src" "$dest"; then
+      echo "[ok] $dest"
+      continue
+    fi
+    sudo install -D -m "$(stat -c %a "$src")" "$src" "$dest"
+    echo "[install] $dest"
+    case "$dest" in
+      /etc/NetworkManager/*) nm_changed=1 ;;
+      /etc/systemd/*) systemd_changed=1 ;;
+      /etc/tmpfiles.d/*) tmpfiles_changed=1 ;;
+    esac
+  done < <(find "$root/system" -type f -print0)
+
+  if (( nm_changed )) && command -v nmcli >/dev/null 2>&1; then
+    sudo nmcli general reload conf
+    echo "[reload] NetworkManager configuration"
+  fi
+
+  if (( tmpfiles_changed )); then
+    sudo systemd-tmpfiles --create
+    echo "[apply] tmpfiles.d"
+  fi
+
+  if (( systemd_changed )); then
+    sudo systemctl daemon-reload
+    echo "[reload] systemd units (changed units are NOT restarted automatically)"
+  fi
+
+  # Every unit checked into system/etc/systemd/system is kept enabled.
+  for src in "$root/system/etc/systemd/system"/*; do
+    [[ -f "$src" ]] || continue
+    unit="$(basename "$src")"
+    if ! systemctl is-enabled --quiet "$unit" 2>/dev/null; then
+      sudo systemctl enable "$unit"
+      echo "[enable] $unit"
+    fi
+  done
+}
+
+apply_wake_on_lan() {
+  # NetworkManager only pushes wake-on-lan to the NIC when a connection
+  # (re)activates; set it with ethtool so it's live without bouncing the link.
+  local dev
+  while IFS= read -r dev; do
+    if sudo ethtool -s "$dev" wol g 2>/dev/null; then
+      echo "[wol] $dev: $(sudo ethtool "$dev" | grep -i 'wake-on: ' | tr -d '\t')"
+    else
+      echo "[warn] could not enable Wake-on-LAN on $dev" >&2
+    fi
+  done < <(nmcli -t -f DEVICE,TYPE,STATE device status 2>/dev/null |
+    awk -F: '$2 == "ethernet" && $3 != "unmanaged" {print $1}')
+}
+
 link_core_configs() {
   local root
   root="$(repo_root)"

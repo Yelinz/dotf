@@ -1,0 +1,15 @@
+
+[Unit]
+Description=Mount homelab via rclone
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=rclone mount --allow-other --vfs-cache-mode writes --dir-cache-time 5s b532c0002c2d-dav: /mnt/homelab
+ExecStop=/bin/fusermount3 -u /mnt/homelab
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
