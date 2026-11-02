@@ -1,0 +1,26 @@
+[Unit]
+Description=Renew LG webOS dev mode session
+Documentation=https://github.com/gabe565/webos-dev-mode
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+LoadCredential=token:/etc/lg-tv-devmode/token
+ExecStart=/usr/local/bin/lg-tv-devmode-renew extend
+TimeoutStartSec=5min
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+# AF_UNIX/AF_NETLINK are needed by glibc name resolution, not just AF_INET*.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+SystemCallFilter=@system-service
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

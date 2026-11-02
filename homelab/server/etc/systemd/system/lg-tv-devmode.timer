@@ -1,0 +1,14 @@
+[Unit]
+Description=Renew LG webOS dev mode session daily
+Documentation=https://github.com/gabe565/webos-dev-mode
+
+[Timer]
+OnCalendar=daily
+# Catch up after downtime, and don't hammer LG at exactly midnight.
+Persistent=true
+RandomizedDelaySec=30min
+AccuracySec=1min
+Unit=lg-tv-devmode.service
+
+[Install]
+WantedBy=timers.target

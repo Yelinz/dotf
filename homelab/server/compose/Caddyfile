@@ -1,0 +1,200 @@
+# ---------------------------------------------------------------------------
+# Reverse proxy for the whole stack.  Two tiers:
+#   PUBLIC   - the vhosts intended to be reachable from the internet later
+#   INTERNAL - LAN-only admin UIs; never open a firewall pinhole for these
+#
+# SSO IS BUILT BUT NOT ENABLED.  Every site has a commented `import sso` line.
+# Uncomment it (and start Authelia, see runbook) to put a login in front.
+# ---------------------------------------------------------------------------
+
+{
+	admin off
+	# Caddy sits directly on the edge; trust proxy headers only from RFC1918.
+	servers {
+		trusted_proxies static private_ranges
+	}
+	# For a real domain later, replace `tls internal` below with ACME DNS-01
+	# and set your email here:
+	# email {$ACME_EMAIL}
+}
+
+# --- snippets --------------------------------------------------------------
+
+(tlsconf) {
+	# Local CA: browsers warn until you trust caddy-conf/data/caddy/pki/authorities/local/root.crt
+	# Public swap: delete this line and add a global `acme_dns <provider> <token>`.
+	tls internal
+}
+
+(common) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+(sso) {
+	# ACTIVE.  Any site that does `import sso` requires an Authelia session.
+	# Per-site policy (one_factor / two_factor) lives in
+	# authelia-conf/configuration.yml under access_control.
+	forward_auth authelia:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+	}
+}
+
+# API paths that must never sit behind an interactive login, or app-to-app
+# calls and mobile clients break.  Imported by the *arr sites.
+(apibypass) {
+	@api path /api/* /ping /feed/*
+	handle @api {
+		reverse_proxy {args[0]}
+	}
+}
+
+# Authelia login portal.  Returns 502 until you start it with
+#   docker compose --profile sso up -d authelia
+auth.{$DOMAIN} {
+	import common
+	import tlsconf
+	reverse_proxy authelia:9091
+}
+
+# ===========================================================================
+# PUBLIC TIER
+# ===========================================================================
+
+# Jellyfin runs natively on the host, not in Docker.
+# NEVER put forward-auth in front of this: TV/console/mobile clients cannot
+# complete a browser login and will simply fail to connect.
+jellyfin.{$DOMAIN} {
+	import common
+	import tlsconf
+	reverse_proxy host.docker.internal:8096
+}
+
+# Immich supports real OIDC natively (works in the mobile app too) - use that
+# rather than forward-auth, for the same client-compatibility reason.
+immich.{$DOMAIN} {
+	import common
+	import tlsconf
+	request_body {
+		max_size 100GB
+	}
+	reverse_proxy immich_server:2283
+}
+
+suwayomi.{$DOMAIN} {
+	import common
+	import tlsconf
+	# import sso
+	reverse_proxy suwayomi:4567
+}
+
+trek.{$DOMAIN} {
+	import common
+	import tlsconf
+	import sso
+	reverse_proxy trek:3000
+}
+
+# Postiz has no login of its own: postiz-conf/nginx.conf injects a fixed admin
+# JWT into every request.  Authelia is therefore the ONLY thing standing in
+# front of the connected social accounts, so this vhost is gated at
+# two_factor, and the container no longer publishes a LAN port - Caddy is the
+# only way in.
+#
+# Do NOT add a bypass for /api/public/v1 here: the injected JWT would satisfy
+# the backend without an API key.  Automation should talk to postiz:5000 over
+# the internal Docker network instead.
+postiz.{$DOMAIN} {
+	import common
+	import tlsconf
+	import sso
+	reverse_proxy postiz:5000
+}
+
+copyparty.{$DOMAIN} {
+	import common
+	import tlsconf
+	# import sso   <- copyparty also supports header SSO natively (--idp-h-usr)
+	reverse_proxy copyparty:3923
+}
+
+# ===========================================================================
+# INTERNAL TIER - LAN only.  No pinholes for these.
+# ===========================================================================
+
+sonarr.{$DOMAIN} {
+	import common
+	import tlsconf
+	import apibypass sonarr:8989
+	# import sso
+	reverse_proxy sonarr:8989
+}
+
+radarr.{$DOMAIN} {
+	import common
+	import tlsconf
+	import apibypass radarr:7878
+	# import sso
+	reverse_proxy radarr:7878
+}
+
+prowlarr.{$DOMAIN} {
+	import common
+	import tlsconf
+	import apibypass prowlarr:9696
+	# import sso
+	reverse_proxy prowlarr:9696
+}
+
+seerr.{$DOMAIN} {
+	import common
+	import tlsconf
+	import apibypass seerr:5055
+	# import sso
+	reverse_proxy seerr:5055
+}
+
+backrest.{$DOMAIN} {
+	import common
+	import tlsconf
+	# import sso
+	reverse_proxy backrest:9898
+}
+
+mailpit.{$DOMAIN} {
+	import common
+	import tlsconf
+	# import sso
+	reverse_proxy mailpit:8025
+}
+
+glances.{$DOMAIN} {
+	import common
+	import tlsconf
+	# import sso
+	reverse_proxy host.docker.internal:61208
+}
+
+# Deluge's daemon (outbound bittorrent traffic) stays isolated behind
+# vpn-sidecar; only the web UI is fronted here so Authelia can gate it.
+# Caddy joined the vpn_isolated network solely to reach this HTTP port -
+# it does not touch deluge's torrent traffic or the VPN tunnel.
+deluge.{$DOMAIN} {
+	import common
+	import tlsconf
+	import sso
+	reverse_proxy vpn-sidecar:8112
+}
+
+# ===========================================================================
+# No catch-all site on purpose.  An unknown Host / a request straight to the
+# IP has no matching certificate, so Caddy aborts at the TLS handshake and
+# nothing is routed - a scanner hitting the bare address learns nothing.
+# ===========================================================================

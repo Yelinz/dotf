@@ -1,0 +1,11 @@
+[Unit]
+Description=Sleep-On-LAN daemon
+
+[Service]
+User=root
+WorkingDirectory=/etc/sol
+ExecStart=/usr/local/bin/sol
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

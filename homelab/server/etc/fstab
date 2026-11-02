@@ -1,0 +1,9 @@
+UUID=30c8424a-01da-4458-8dbc-bb5b0c1baf03 /               ext4    errors=remount-ro 0       1
+UUID=CF3E-FD54  /boot/efi       vfat    umask=0077      0       1
+UUID=134b1423-5a48-4f2d-9596-9024e879fbb5 /tmp            ext4    defaults        0       2
+UUID=11837f1e-92f8-4b57-9346-58e2060baac5 /var            ext4    defaults        0       2
+UUID=b484528d-7658-40a5-84d4-272eb0f97492 none            swap    sw              0       0
+UUID=77cc2c9a-e631-4189-8b4d-32cccf300e91  /home  ext4  noatime  0  2
+UUID=3262BFF362BFB9C5 /media/media/Elements ntfs-3g defaults,nofail,noatime,allow_other,uid=1000,gid=1000 0 0
+UUID=3b4e4d59-6856-409f-84ae-753bda6152e4  /mnt/ssd  ext4  noatime,nofail  0  2
+UUID=0548fe19-50eb-48b0-b505-60158a6c7408  none      swap  sw,pri=100,nofail  0  0

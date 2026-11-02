@@ -1,0 +1,1094 @@
+---
+
+# Shared log rotation: caps every container at 30 MB on disk (3 x 10 MB)
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  copyparty:
+    image: copyparty/ac:latest
+    container_name: copyparty
+    user: "1000:1000"
+    restart: unless-stopped
+    ports:
+      - ${LAN_IP}:3923:3923
+    volumes:
+      - ./copyparty-conf:/cfg:z
+      - /home/media/Bilder:/w/Bilder:z
+      - /home/media/Dokumente:/w/Dokumente:z
+      - /home/media/Downloads:/w/Downloads:z
+      - /home/media/Schreibtisch:/w/Schreibtisch:z
+      - /home/media/Videos:/w/Videos:z
+      - /home/media/Musik:/w/Musik:z
+
+    environment:
+      LD_PRELOAD: /usr/lib/libmimalloc-secure.so.2
+      # enable mimalloc by replacing "NOPE" with "2" for a nice speed-boost (will use twice as much ram)
+
+      PYTHONUNBUFFERED: 1
+      # ensures log-messages are not delayed (but can reduce speed a tiny bit)
+
+    logging: *default-logging
+    blkio_config:
+      # Lower value = lower disk I/O priority when HDDs are saturated
+      weight: 200
+
+    stop_grace_period: 15s  # thumbnailer is allowed to continue finishing up for 10s after the shutdown signal
+    healthcheck:
+      # hide it from logs with "/._" so it matches the default --lf-url filter 
+      test: ["CMD-SHELL", "wget --spider -q 127.0.0.1:3923/?reset=/._"]
+      interval: 1m
+      timeout: 2s
+      retries: 5
+      start_period: 15s
+
+  backrest:
+    logging: *default-logging
+    image: ghcr.io/garethgeorge/backrest:latest
+    container_name: backrest
+    hostname: backrest
+    volumes:
+      - ./backrest-conf/data:/data
+      - ./backrest-conf/config:/config
+      - ./backrest-conf/cache:/cache
+      - ./backrest-conf/tmp:/tmp
+      - ./backrest-conf/rclone:/root/.config/rclone
+      - /home/media/Bilder:/userdata/immich-images  # Mount local paths to backup
+      - /home/media/tools:/userdata/container-confs  # Mount local paths to backup
+      - type: bind
+        source: /media/media/Elements
+        target: /repos/WDElements
+        bind:
+          propagation: rslave
+      # rslave: follow the host's rclone FUSE mount. With the short syntax the
+      # container keeps the empty dir it saw at startup, so restic reports
+      # "repository does not exist" whenever rclone remounts after us.
+      - type: bind
+        source: /mnt/protondrive
+        target: /repos/protondrive
+        bind:
+          propagation: rslave
+    environment:
+      - BACKREST_DATA=/data
+      - BACKREST_CONFIG=/config/config.json
+      - XDG_CACHE_HOME=/cache
+      - TMPDIR=/tmp
+      - TZ=Europe/Berlin
+    ports:
+      - "${LAN_IP}:9898:9898"
+    restart: unless-stopped
+
+  # komodo-mongo:
+  #   image: mongo
+  #   container_name: komodo-mongo
+  #   profiles: ["komodo"]
+  #   labels:
+  #     komodo.skip: ""
+  #   command: --quiet --wiredTigerCacheSizeGB 0.25
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./komodo-conf/mongo-data:/data/db
+  #     - ./komodo-conf/mongo-config:/data/configdb
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: ${KOMODO_DB_USERNAME}
+  #     MONGO_INITDB_ROOT_PASSWORD: ${KOMODO_DB_PASSWORD}
+
+  # komodo-core:
+  #   image: ghcr.io/moghtech/komodo-core:${COMPOSE_KOMODO_IMAGE_TAG:-latest}
+  #   container_name: komodo-core
+  #   profiles: ["komodo"]
+  #   labels:
+  #     komodo.skip: ""
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - komodo-mongo
+  #   ports:
+  #     - 9120:9120
+  #   env_file: .env
+  #   environment:
+  #     KOMODO_DATABASE_ADDRESS: komodo-mongo:27017
+  #     KOMODO_DATABASE_USERNAME: ${KOMODO_DB_USERNAME}
+  #     KOMODO_DATABASE_PASSWORD: ${KOMODO_DB_PASSWORD}
+  #   volumes:
+  #     # Store dated backups of the database
+  #     - ./komodo-conf/backups:/backups
+  #     # Store sync files on server
+  #     - ./komodo-conf/syncs:/syncs
+
+  # # https://github.com/moghtech/komodo/tree/main/scripts
+  # komodo-periphery:
+  #   image: ghcr.io/moghtech/komodo-periphery:${COMPOSE_KOMODO_IMAGE_TAG:-latest}
+  #   container_name: komodo-periphery
+  #   profiles: ["komodo"]
+  #   labels:
+  #     komodo.skip: ""
+  #   restart: unless-stopped
+  #   env_file: .env
+  #   volumes:
+  #     # Mount external docker socket
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     # Allow Periphery to see processes outside of container
+  #     - /proc:/proc
+  #     # Must be the same path inside and outside the container,
+  #     # or docker compose path resolution will fail.
+  #     - ${PERIPHERY_ROOT_DIRECTORY:-/home/media/tools}:${PERIPHERY_ROOT_DIRECTORY:-/home/media/tools}
+
+  # --------------
+  # Arr stack
+  # --------------
+  deluge:
+    image: lscr.io/linuxserver/deluge:2.2.0
+    container_name: deluge
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - UMASK=002
+      - TZ=Europe/Berlin
+    volumes:
+      - ./deluge-conf:/config
+      - /home/media/Downloads:/downloads
+      - /home/media:/data
+      - /mnt/ssd/deluge-incomplete:/incomplete
+    restart: unless-stopped
+    logging: *default-logging
+    blkio_config:
+      # Keep torrent I/O from starving the rest of the host on HDDs
+      weight: 10
+    cpu_shares: 256
+    network_mode: service:vpn-sidecar
+    depends_on:
+      vpn-sidecar:
+        condition: service_healthy
+
+  # LAN resolver: answers *.home.lan for every device on the network so the
+  # Caddy vhosts work without per-device hosts entries. Forwards everything
+  # else to the FRITZ!Box. Adblock list is mounted but not included - see
+  # dns-conf/unbound.conf.
+  lan-dns:
+    logging: *default-logging
+    image: mvance/unbound:latest
+    container_name: lan-dns
+    restart: unless-stopped
+    ports:
+      - "${LAN_IP}:53:53/tcp"
+      - "${LAN_IP}:53:53/udp"
+    volumes:
+      - ./dns-conf/unbound.conf:/opt/unbound/etc/unbound/unbound.conf:ro
+      - ./dns-conf/home-lan.conf:/opt/unbound/etc/unbound/home-lan.conf:ro
+      - ./dns-conf/adblock.conf:/opt/unbound/etc/unbound/adblock.conf:ro
+    security_opt:
+      - no-new-privileges:true
+
+  vpn-sidecar:
+    logging: *default-logging
+    image: lscr.io/linuxserver/wireguard:latest
+    container_name: vpn-sidecar
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    networks:
+      - vpn_isolated
+    ports:
+      - ${LAN_IP}:8112:8112
+      # Deluge daemon access for deluge-gtk on the host
+      - "${LAN_IP}:58846:58847"
+    volumes:
+      - /lib/modules:/lib/modules
+      - ./wireguard-conf:/config
+    environment:
+      - PUID=911
+      - PGID=911
+      - TZ=Europe/Berlin
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    healthcheck:
+      test: ["CMD", "wg", "show", "wg0"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # Road-warrior VPN into the LAN (the Zyxel has no built-in WireGuard).
+  # Deliberately a separate container from vpn-sidecar: that one is a Proton
+  # *client* for Deluge, this is a *server* for our own devices.
+  # Exposure: 51820/udp only, on the static public IPv6 (needs a Zyxel IPv6
+  # firewall rule) and on LAN_IP (target of the Zyxel IPv4 port forward).
+  # Peer keys live in wg-server-conf (-> /mnt/ssd/conf, 911:911 0700).
+  # Show a peer's QR: docker exec wg-server /app/show-peer phone
+  wg-server:
+    logging: *default-logging
+    image: lscr.io/linuxserver/wireguard:latest
+    container_name: wg-server
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    networks:
+      - wg_server
+    ports:
+      - "${LAN_IP}:51820:51820/udp"
+      - "[${WG_PUBLIC_V6}]:51820:51820/udp"
+    volumes:
+      - ./wg-server-conf:/config
+    environment:
+      - PUID=911
+      - PGID=911
+      - TZ=Europe/Berlin
+      # Endpoint written into peer configs.  Raw IP, no DNS dependency.
+      - SERVERURL=[${WG_PUBLIC_V6}]
+      - SERVERPORT=51820
+      - PEERS=${WG_PEERS:-phone,laptop}
+      # lan-dns, so *.home.lan resolves over the tunnel
+      - PEERDNS=${LAN_IP}
+      - INTERNAL_SUBNET=10.13.13.0
+      - ALLOWEDIPS=0.0.0.0/0, ::/0
+      # never print peer private keys / QR codes into docker logs
+      - LOG_CONFS=false
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    healthcheck:
+      test: ["CMD", "wg", "show", "wg0"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # haproxy:
+  #   image: haproxy:2.9-alpine
+  #   container_name: haproxy
+  #   restart: unless-stopped
+  #   network_mode: service:vpn-sidecar
+  #   depends_on:
+  #     vpn-sidecar:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./haproxy.conf:/usr/local/etc/haproxy/haproxy.cfg:ro
+
+  sonarr:
+    logging: *default-logging
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - UMASK=002
+      - TZ=Europe/Berlin
+    volumes:
+      - ./sonarr-conf:/config
+      - /home/media:/data
+      # Compatibility mount for in-flight downloads still reported as /downloads
+      - /home/media/Downloads:/downloads
+    ports:
+      - ${LAN_IP}:8989:8989
+    restart: unless-stopped
+  radarr:
+    logging: *default-logging
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - UMASK=002
+      - TZ=Europe/Berlin
+    volumes:
+      - ./radarr-conf:/config
+      - /home/media:/data
+      # Compatibility mount for in-flight downloads still reported as /downloads
+      - /home/media/Downloads:/downloads
+    ports:
+      - ${LAN_IP}:7878:7878
+    restart: unless-stopped
+  prowlarr:
+    logging: *default-logging
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Berlin
+    volumes:
+      - ./prowlarr-conf:/config
+    ports:
+      - ${LAN_IP}:9696:9696
+    restart: unless-stopped
+  seerr:
+    logging: *default-logging
+    image: ghcr.io/seerr-team/seerr:latest
+    init: true
+    container_name: seerr
+    environment:
+      - LOG_LEVEL=info
+      - TZ=Europe/Berlin
+    volumes:
+      - ./jellyseerr-conf:/app/config
+    ports:
+      - ${LAN_IP}:5055:5055
+    restart: unless-stopped
+  # recyclarr:
+  #   image: ghcr.io/recyclarr/recyclarr:latest
+  #   container_name: recyclarr
+  #   environment:
+  #     - TZ=Europe/Berlin
+  #   volumes:
+  #     - ./recyclarr-config:/config
+  #   restart: unless-stopped
+  flaresolverr:
+    logging: *default-logging
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-warning}
+      - LOG_FILE=${LOG_FILE:-none}
+      - LOG_HTML=${LOG_HTML:-false}
+      - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
+      - TZ=Europe/Berlin
+    ports:
+      - "127.0.0.1:${PORT:-8191}:8191"
+    volumes:
+      - ./flaresolver-config:/config
+    restart: unless-stopped
+
+  # fileflows:
+  #   image: revenz/fileflows
+  #   restart: unless-stopped
+  #   runtime: nvidia
+  #   ports:
+  #     - "19200:5000"
+  #   environment:
+  #     - TZ=Europe/Berlin
+  #     - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+  #     - NVIDIA_VISIBLE_DEVICES=all
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #     - ./fileflows-conf:/app/Data
+  #     - /home/media/Videos:/media
+  #     - /home/media/tools/chinese-cinema-transcode.sh:/app/scripts/chinese-cinema-transcode.sh:ro
+
+  # --------------
+  # Manga / Comics
+  # --------------
+  suwayomi:
+    logging: *default-logging
+    image: ghcr.io/suwayomi/tachidesk:preview
+    container_name: suwayomi
+    environment:
+      - TZ=Europe/Berlin
+    volumes:
+      - ./suwayomi-conf:/home/suwayomi/.local/share/Tachidesk
+      - ./suwayomi-conf/tmp:/tmp/Tachidesk
+    ports:
+      - ${LAN_IP}:4567:4567
+    restart: unless-stopped
+
+  # komga:
+  #   image: gotson/komga:latest
+  #   container_name: komga
+  #   environment:
+  #     - TZ=Europe/Berlin
+  #   volumes:
+  #     - ./komga-conf:/config
+  #     - /home/media/Manga:/data
+  #   ports:
+  #     - 25600:25600
+  #   restart: unless-stopped
+
+  # subtitles
+  #bazarr:
+  #  image: lscr.io/linuxserver/bazarr:latest
+  #  container_name: bazarr
+  #  environment:
+  #    - PUID=1000
+  #    - PGID=1000
+  #    - TZ=Europe/Berlin
+  #  volumes:
+  #    - ./bazarr-conf:/config
+  #    - /home/media/Videos/Filme:/data/movies
+  #    - /home/media/Videos/Serien:/data/tv
+  #  ports:
+  #    - 6767:6767
+  #  restart: unless-stopped
+
+  # --------------
+  # Immich containers
+  # --------------
+  immich-server:
+    container_name: immich_server
+    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+                - compute
+                - video
+    volumes:
+      # Do not edit the next line. If you want to change the media storage location on your system, edit the value of UPLOAD_LOCATION in the .env file
+      - ${UPLOAD_LOCATION}:/data
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    environment:
+      # Honour X-Forwarded-For/-Proto from Caddy and share-proxy (both on
+      # Docker bridges), so Immich sees the real client and https.
+      IMMICH_TRUSTED_PROXIES: 172.16.0.0/12
+    ports:
+      - '${LAN_IP}:2283:2283'
+    networks:
+      - default
+      - dawarich
+      # Internal network shared only with share-proxy (public share links).
+      - immich_edge
+    depends_on:
+      - redis
+      - database
+    restart: unless-stopped
+    logging: *default-logging
+    blkio_config:
+      # Keep Immich app writes below DB priority during contention
+      weight: 250
+    healthcheck:
+      disable: false
+  immich-machine-learning:
+    container_name: immich_machine_learning
+    # Note the `-cuda` at the end
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}-cuda
+    # Note the lack of an `extends` section
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+    volumes:
+      - /opt/docker/immich:/cache
+    env_file:
+      - .env
+    restart: unless-stopped
+    logging: *default-logging
+    blkio_config:
+      # Lowest priority among the Immich components
+      weight: 150
+    healthcheck:
+      disable: false
+  redis:
+    logging: *default-logging
+    container_name: immich_redis
+    command: ["--loglevel", "warning"]
+    image: docker.io/valkey/valkey:9@sha256:fb8d272e529ea567b9bf1302245796f21a2672b8368ca3fcb938ac334e613c8f
+    healthcheck:
+      test: redis-cli ping || exit 1
+    restart: unless-stopped
+    networks:
+      - default
+      - dawarich
+  database:
+    build:
+      context: ./database-conf
+      dockerfile: Dockerfile
+    container_name: immich_postgres
+    ports:
+      - 127.0.0.1:5432:5432
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_DB: ${DB_DATABASE_NAME}
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+      # Uncomment the DB_STORAGE_TYPE: 'HDD' var if your database isn't stored on SSDs
+      DB_STORAGE_TYPE: 'HDD'
+    volumes:
+      # Do not edit the next line. If you want to change the database storage location on your system, edit the value of DB_DATA_LOCATION in the .env file
+      - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
+    shm_size: 128mb
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    blkio_config:
+      # Keep DB responsive even when other containers are busy
+      weight: 400
+    networks:
+      - default
+
+  # immich-kiosk:
+  #   image: ghcr.io/damongolding/immich-kiosk:latest
+  #   container_name: immich-kiosk
+  #   tty: true
+  #   environment:
+  #     - LANG=de_DE
+  #     - TZ=Europe/Berlin
+  #   ports:
+  #     - 30000:3000
+  #   volumes:
+  #     - ./immich-kiosk-conf:/config
+  #     # - ./custom.css:/custom.css
+  #     # - ./offline-assets:/offline-assets
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 10s
+
+
+  # ------------
+  # Dawarich containers
+  # -----------------
+  # dawarich_db:
+  #   image: postgis/postgis:17-3.5-alpine
+  #   container_name: dawarich_db
+  #   environment:
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD}
+  #     POSTGRES_USER: ${DB_USERNAME}
+  #     POSTGRES_DB: dawarich_development
+  #   volumes:
+  #     - /opt/docker/dawarich/data:/var/lib/postgresql/data
+  #   networks:
+  #     - dawarich
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d dawarich_development"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # dawarich_app:
+  #   image: freikin/dawarich:latest
+  #   container_name: dawarich_app
+  #   volumes:
+  #     - /opt/docker/dawarich/public:/var/app/public
+  #     - /opt/docker/dawarich/watched:/var/app/tmp/imports/watched
+  #     - /opt/docker/dawarich/storage:/var/app/storage
+  #     - /opt/docker/dawarich/data:/dawarich_db_data
+  #   networks:
+  #     - dawarich
+  #   ports:
+  #     - "${DAWARICH_APP_PORT:-3000}:3000"
+  #     # - "${PROMETHEUS_PORT:-9394}:9394" # Prometheus exporter, uncomment if needed
+  #   stdin_open: true
+  #   tty: true
+  #   entrypoint: web-entrypoint.sh
+  #   command: ['bin/rails', 'server', '-p', '3000', '-b', '::']
+  #   restart: unless-stopped
+  #   environment:
+  #     RAILS_ENV: ${DAWARICH_RAILS_ENV:-development}
+  #     REDIS_URL: ${DAWARICH_REDIS_URL:-redis://redis:6379}
+  #     DATABASE_HOST: dawarich_db
+  #     DATABASE_PORT: 5432
+  #     DATABASE_USERNAME: ${DB_USERNAME}
+  #     DATABASE_PASSWORD: ${DB_PASSWORD}
+  #     DATABASE_NAME: ${DAWARICH_DATABASE_NAME:-dawarich_development}
+  #     MIN_MINUTES_SPENT_IN_CITY: ${DAWARICH_MIN_MINUTES_SPENT_IN_CITY:-60}
+  #     APPLICATION_HOSTS: ${DAWARICH_APPLICATION_HOSTS:-localhost,::1,127.0.0.1}
+  #     TIME_ZONE: ${TIME_ZONE:-Europe/Berlin}
+  #     APPLICATION_PROTOCOL: ${DAWARICH_APPLICATION_PROTOCOL:-http}
+  #     PROMETHEUS_EXPORTER_ENABLED: ${PROMETHEUS_EXPORTER_ENABLED:-false}
+  #     PROMETHEUS_EXPORTER_HOST: ${PROMETHEUS_EXPORTER_HOST:-0.0.0.0}
+  #     PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-9394}
+  #     SECRET_KEY_BASE: ${SECRET_KEY_BASE:-"CHANGE_ME"}
+  #     RAILS_LOG_TO_STDOUT: ${RAILS_LOG_TO_STDOUT:-true}
+  #     SELF_HOSTED: ${SELF_HOSTED:-true}
+  #     STORE_GEODATA: ${STORE_GEODATA:-true}
+  #     PHOTON_API_HOST: photon.komoot.io
+  #     PHOTON_API_USE_HTTPS: true
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: ${LOG_MAX_SIZE:-100m}
+  #       max-file: ${LOG_MAX_FILE:-5}
+  #   healthcheck:
+  #     test: [ "CMD-SHELL", "wget -qO - http://127.0.0.1:3000/api/v1/health | grep -q '\"status\"\\s*:\\s*\"ok\"'" ]
+  #     interval: 10s
+  #     retries: 30
+  #     start_period: 30s
+  #     timeout: 10s
+  #   depends_on:
+  #     dawarich_db:
+  #       condition: service_healthy
+  #       restart: true
+  #     redis:
+  #       condition: service_healthy
+  #       restart: true
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: ${APP_CPU_LIMIT:-0.50}
+  #         memory: ${APP_MEMORY_LIMIT:-4G}
+
+  # dawarich_sidekiq:
+  #   image: freikin/dawarich:latest
+  #   container_name: dawarich_sidekiq
+  #   volumes:
+  #     - /opt/docker/dawarich/public:/var/app/public
+  #     - /opt/docker/dawarich/watched:/var/app/tmp/imports/watched
+  #     - /opt/docker/dawarich/storage:/var/app/storage
+  #   networks:
+  #     - dawarich
+  #   stdin_open: true
+  #   tty: true
+  #   entrypoint: sidekiq-entrypoint.sh
+  #   command: ['sidekiq']
+  #   restart: unless-stopped
+  #   environment:
+  #     RAILS_ENV: ${DAWARICH_RAILS_ENV:-development}
+  #     REDIS_URL: ${DAWARICH_REDIS_URL:-redis://redis:6379}
+  #     DATABASE_HOST: dawarich_db
+  #     DATABASE_PORT: 5432
+  #     DATABASE_USERNAME: ${DB_USERNAME}
+  #     DATABASE_PASSWORD: ${DB_PASSWORD}
+  #     DATABASE_NAME: ${DAWARICH_DATABASE_NAME:-dawarich_development}
+  #     APPLICATION_HOSTS: ${DAWARICH_APPLICATION_HOSTS:-localhost,::1,127.0.0.1}
+  #     BACKGROUND_PROCESSING_CONCURRENCY: ${BACKGROUND_PROCESSING_CONCURRENCY:-10}
+  #     APPLICATION_PROTOCOL: ${DAWARICH_APPLICATION_PROTOCOL:-http}
+  #     PROMETHEUS_EXPORTER_ENABLED: ${PROMETHEUS_EXPORTER_ENABLED:-false}
+  #     PROMETHEUS_EXPORTER_HOST: ${PROMETHEUS_EXPORTER_HOST_SIDEKIQ:-dawarich_app}
+  #     PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT:-9394}
+  #     SECRET_KEY_BASE: ${SECRET_KEY_BASE:-"CHANGE_ME"}
+  #     RAILS_LOG_TO_STDOUT: ${RAILS_LOG_TO_STDOUT:-true}
+  #     SELF_HOSTED: ${SELF_HOSTED:-true}
+  #     STORE_GEODATA: ${STORE_GEODATA:-true}
+  #     PHOTON_API_HOST: photon.komoot.io
+  #     PHOTON_API_USE_HTTPS: true
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: ${LOG_MAX_SIZE:-100m}
+  #       max-file: ${LOG_MAX_FILE:-5}
+  #   healthcheck:
+  #     test: [ "CMD-SHELL", "pgrep -f sidekiq" ]
+  #     interval: 10s
+  #     retries: 30
+  #     start_period: 30s
+  #     timeout: 10s
+  #   depends_on:
+  #     dawarich_db:
+  #       condition: service_healthy
+  #       restart: true
+  #     redis:
+  #       condition: service_healthy
+  #       restart: true
+  #     dawarich_app:
+  #       condition: service_healthy
+  #       restart: true
+
+  # timelinize:
+  #   image: ghcr.io/timelinize/timelinize
+  #   container_name: timelinize
+  #   restart: unless-stopped
+  #   ports:
+  #     - 12002:12002
+  #   volumes:
+  #     - /home/media/timelinize:/repo
+  #     - ./timelinize-conf:/app/.config/timelinize
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
+  trek:
+    logging: *default-logging
+    image: mauriceboe/trek:latest
+    container_name: trek
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+    ports:
+      - "${LAN_IP}:3043:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}   # generate with: openssl rand -hex 32
+      - TZ=${TZ:-UTC}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - APP_URL=${APP_URL:-}                 # required for OIDC + email links
+      - COOKIE_SECURE=false
+    volumes:
+      - ./trek-conf/data:/app/data
+      - ./trek-conf/uploads:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  glances:
+    logging: *default-logging
+    image: nicolargo/glances:latest-full
+    container_name: glances
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    # Host-level view keeps package services (e.g. jellyfin) visible too
+    network_mode: host
+    pid: host
+    environment:
+      - TZ=Europe/Berlin
+      - GLANCES_OPT=-w
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/os-release:/etc/os-release:ro
+
+  # --------------
+  # Social media automation stack
+  # --------------
+  temporal-elasticsearch:
+    logging: *default-logging
+    image: elasticsearch:7.17.27
+    container_name: temporal-elasticsearch
+    restart: unless-stopped
+    environment:
+      - cluster.routing.allocation.disk.threshold_enabled=true
+      - cluster.routing.allocation.disk.watermark.low=512mb
+      - cluster.routing.allocation.disk.watermark.high=256mb
+      - cluster.routing.allocation.disk.watermark.flood_stage=128mb
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms256m -Xmx256m
+      - xpack.security.enabled=false
+      - logger.level=WARN
+    expose:
+      - 9200
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  temporal:
+    logging: *default-logging
+    image: temporalio/auto-setup:1.24.2
+    container_name: temporal
+    restart: unless-stopped
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PWD: ${DB_PASSWORD}
+      POSTGRES_SEEDS: database
+      ENABLE_ES: "true"
+      ES_SEEDS: temporal-elasticsearch
+      ES_VERSION: v7
+      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/dynamic_config/docker.yaml
+      LOG_LEVEL: warn
+    volumes:
+      - ./temporal-conf/dynamic_config:/etc/temporal/dynamic_config
+    depends_on:
+      database:
+        condition: service_healthy
+      temporal-elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z $(hostname -i | awk '{print $1}') 7233 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # n8n:
+  #   build:
+  #     context: ./n8n-conf
+  #     dockerfile: Dockerfile
+  #   container_name: n8n
+  #   restart: unless-stopped
+  #   ports:
+  #     - "5678:5678"
+  #   environment:
+  #     - N8N_HOST=0.0.0.0
+  #     - N8N_PORT=5678
+  #     - N8N_PROTOCOL=http
+  #     - WEBHOOK_URL=http://localhost:5678/
+  #     - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+  #     - DB_TYPE=postgresdb
+  #     - DB_POSTGRESDB_HOST=database
+  #     - DB_POSTGRESDB_PORT=5432
+  #     - DB_POSTGRESDB_DATABASE=n8n
+  #     - DB_POSTGRESDB_USER=${DB_USERNAME}
+  #     - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD}
+  #     - NODE_FUNCTION_ALLOW_BUILTIN=*
+  #     - N8N_RUNNERS_TASK_TIMEOUT=600
+  #     - N8N_SECURE_COOKIE=false
+  #     - TZ=Europe/Berlin
+  #     - GENERIC_TIMEZONE=Europe/Berlin
+  #     # Buffer.com API — fill in .env (see SETUP.md for how to find profile IDs)
+  #     - BUFFER_ACCESS_TOKEN=${BUFFER_ACCESS_TOKEN:-}
+  #     - BUFFER_TIKTOK_PROFILE_ID=${BUFFER_TIKTOK_PROFILE_ID:-}
+  #     - BUFFER_INSTAGRAM_PROFILE_ID=${BUFFER_INSTAGRAM_PROFILE_ID:-}
+  #     - BUFFER_X_PROFILE_ID=${BUFFER_X_PROFILE_ID:-}
+  #     # Postiz self-hosted API key (Settings → API Keys in the Postiz UI)
+  #     - POSTIZ_API_KEY=${POSTIZ_API_KEY:-}
+  #     # Postiz integration UUIDs — run: curl http://postiz:5000/api/v1/integrations -H "Authorization: Bearer $POSTIZ_API_KEY"
+  #     - POSTIZ_YOUTUBE_INTEGRATION_ID=${POSTIZ_YOUTUBE_INTEGRATION_ID:-}
+  #     - POSTIZ_REDDIT_INTEGRATION_ID=${POSTIZ_REDDIT_INTEGRATION_ID:-}
+  #     - POSTIZ_FACEBOOK_INTEGRATION_ID=${POSTIZ_FACEBOOK_INTEGRATION_ID:-}
+  #     # Groq free-tier API for EN→ZH translation via Llama — get key at console.groq.com
+  #     - GROQ_API_KEY=${GROQ_API_KEY:-}
+  #   volumes:
+  #     - ./n8n-conf/data:/home/node/.n8n
+  #     - ./n8n-conf/videos:/videos
+  #   depends_on:
+  #     database:
+  #       condition: service_healthy
+
+  mailpit:
+    logging: *default-logging
+    image: axllent/mailpit:latest
+    container_name: mailpit
+    restart: unless-stopped
+    ports:
+      - "${LAN_IP}:8025:8025"
+    expose:
+      - "1025"
+
+  postiz:
+    logging: *default-logging
+    image: ghcr.io/gitroomhq/postiz-app:latest
+    container_name: postiz
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+    healthcheck:
+      # Probe the backend directly (the process that silently hangs on cold-boot).
+      # node is always present in the image; curl is not.
+      test: ["CMD", "node", "-e", "const r=require('http').get('http://127.0.0.1:3000/auth/can-register',s=>process.exit(s.statusCode<500?0:1));r.setTimeout(5000,()=>{r.destroy();process.exit(1)});r.on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+    # No LAN port on purpose: Postiz auto-authenticates every request as admin
+    # (see postiz-conf/nginx.conf), so its only entry point is
+    # https://postiz.home.lan through Caddy + Authelia (two_factor).
+    # To reach it directly again, uncomment these and `docker compose up -d postiz`.
+    # ports:
+    #   - "${LAN_IP}:5000:5000"
+    #   - "${LAN_IP}:4200:4200"
+    environment:
+      MAIN_URL: "${POSTIZ_URL:-http://192.168.1.2:5000}"
+      FRONTEND_URL: "${POSTIZ_URL:-http://192.168.1.2:5000}"
+      # Combined image: nginx routes /api/ -> backend, so the browser reaches the
+      # backend at <frontend>/api. The /api suffix is REQUIRED (without it the
+      # frontend calls /user/self etc. and gets 404s). This was the root misconfig.
+      NEXT_PUBLIC_BACKEND_URL: "${POSTIZ_URL:-http://192.168.1.2:5000}/api"
+      JWT_SECRET: ${POSTIZ_JWT_SECRET}
+      DATABASE_URL: "postgresql://${DB_USERNAME}:${DB_PASSWORD}@database:5432/postiz"
+      BACKEND_INTERNAL_URL: "http://localhost:3000"
+      IS_GENERAL: "true"
+      REDIS_URL: "redis://redis:6379"
+      DISABLE_REGISTRATION: "false"
+      STORAGE_PROVIDER: "local"
+      UPLOAD_DIRECTORY: "/uploads"
+      NEXT_PUBLIC_UPLOAD_DIRECTORY: "/uploads"
+      TEMPORAL_ADDRESS: "temporal:7233"
+      TZ: Europe/Berlin
+      NOT_SECURED: "true"
+      EMAIL_PROVIDER: "nodemailer"
+      EMAIL_HOST: "mailpit"
+      EMAIL_PORT: "1025"
+      EMAIL_SECURE: "false"
+      EMAIL_FROM_NAME: "Postiz"
+      EMAIL_FROM_ADDRESS: "noreply@postiz.local"
+    volumes:
+      - ./postiz-conf/uploads:/uploads
+      - ./postiz-conf/config:/config
+      # AUTO-AUTH (local-only, single user): nginx injects a fixed admin JWT on every
+      # request, so Postiz never shows a login screen. Anyone who can reach :5000 is
+      # admin — acceptable because this is LAN-only. Replaces the cookie patch.
+      - ./postiz-conf/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  # Lightweight watchdog: restarts containers labeled autoheal=true when their
+  # Docker healthcheck reports unhealthy. ~3-5MB RAM, polls every 30s, negligible IO.
+  # autoheal:
+  #   image: willfarrell/autoheal:latest
+  #   container_name: autoheal
+  #   restart: unless-stopped
+  #   environment:
+  #     AUTOHEAL_CONTAINER_LABEL: autoheal
+  #     AUTOHEAL_INTERVAL: "30"
+  #     AUTOHEAL_START_PERIOD: "60"
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+
+  # --------------
+  # Edge proxy + SSO
+  # --------------
+  caddy:
+    logging: *default-logging
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "${PROXY_HTTP_PORT:-80}:80"
+      - "${PROXY_HTTPS_PORT:-443}:443"
+      - "${PROXY_HTTPS_PORT:-443}:443/udp"
+    environment:
+      - DOMAIN=${DOMAIN:-home.arpa}
+      - ACME_EMAIL=${ACME_EMAIL:-}
+    volumes:
+      - ./caddy-conf/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-conf/data:/data
+      - ./caddy-conf/config:/config
+    # Reaches natively-installed Jellyfin (:8096) and Glances (:61208)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Also on vpn_isolated so it can reach vpn-sidecar:8112 (Deluge's web UI)
+    # to front it with Authelia. Joining this network only gives Caddy HTTP
+    # access to that one port - it doesn't touch deluge's torrent traffic or
+    # route anything through the VPN tunnel.
+    networks:
+      - default
+      - vpn_isolated
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+
+  # Not started by default (profile "sso").  Bring it up with:
+  #   docker compose --profile sso up -d authelia
+  authelia:
+    logging: *default-logging
+    image: authelia/authelia:latest
+    container_name: authelia
+    profiles: ["sso"]
+    restart: unless-stopped
+    user: "1000:1000"
+    volumes:
+      - ./authelia-conf/configuration.yml:/config/configuration.yml:ro
+      - ./authelia-conf/users_database.yml:/config/users_database.yml
+      - ./authelia-conf/data:/data
+      - ./authelia-conf/secrets:/secrets:ro
+    environment:
+      X_AUTHELIA_CONFIG: /config/configuration.yml
+      AUTHELIA_SESSION_SECRET_FILE: /secrets/session_secret
+      AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE: /secrets/storage_encryption_key
+      AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE: /secrets/jwt_secret
+      # Uncomment together with the identity_providers block in configuration.yml
+      # AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE: /secrets/oidc_hmac_secret
+      TZ: Europe/Berlin
+    expose:
+      - "9091"
+    security_opt:
+      - no-new-privileges:true
+
+  # =========================================================================
+  # PUBLIC SHARE LINKS:  internet -> Cloudflare -> cloudflared -> share-proxy
+  #                      -> immich_server.   Runbook: immich-public-sharing.md
+  #
+  # cloudflared only dials OUT (no router port, no inbound listener).  Each hop
+  # is on its own network, so by container name a tunnel route can reach
+  # share-proxy:8080 and nothing else.  LAN addresses (ports published on
+  # LAN_IP, the router) stay reachable via cf_egress until the staged
+  # cloudflared-egress.nft is applied.  Routes live in the Cloudflare
+  # dashboard (remotely-managed tunnel).
+  # =========================================================================
+
+  # Share-links-only reverse proxy (allowlist in share-proxy-conf/Caddyfile).
+  # Separate from the main Caddy on purpose: its whole config is the public
+  # attack surface, and it has no route to anything but immich_server.
+  share-proxy:
+    logging: *default-logging
+    image: caddy:2-alpine
+    container_name: share-proxy
+    restart: unless-stopped
+    environment:
+      # Must match Immich -> Administration -> Settings -> Server ->
+      # External domain (https://<this>), and the tunnel route's hostname.
+      IMMICH_SHARE_HOST: ${IMMICH_SHARE_HOST:-photos.example.com}
+    volumes:
+      - ./share-proxy-conf/Caddyfile:/etc/caddy/Caddyfile:ro
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /data:size=8m,mode=0700,uid=65532,gid=65532
+      - /config:size=8m,mode=0700,uid=65532,gid=65532
+    cap_drop:
+      - ALL
+    # Only so the image's setcap'd caddy binary may exec (listens on :8080).
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    pids_limit: 100
+    networks:
+      - cf_tunnel
+      - immich_edge
+    depends_on:
+      - immich-server
+
+  cloudflared:
+    logging: *default-logging
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--metrics", "127.0.0.1:20241", "run"]
+    environment:
+      TUNNEL_TOKEN_FILE: /run/secrets/cloudflared_token
+    secrets:
+      - cloudflared_token
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    pids_limit: 100
+    networks:
+      - cf_egress   # internet (Cloudflare edge) - nothing else lives here
+      - cf_tunnel   # internal, shared only with share-proxy
+    depends_on:
+      - share-proxy
+
+networks:
+  dawarich:
+  vpn_isolated:
+  # wg-server only.  Peers are masqueraded onto it, then out via the host.
+  wg_server:
+  # cloudflared's way out.  Fixed bridge name so the staged egress firewall
+  # (cloudflared-egress.nft) can keep it off the LAN.
+  cf_egress:
+    driver_opts:
+      com.docker.network.bridge.name: br-cfegress
+  # cloudflared <-> share-proxy.  internal: no gateway, no internet.
+  cf_tunnel:
+    internal: true
+  # share-proxy <-> immich_server.  internal: no gateway, no internet.
+  immich_edge:
+    internal: true
+
+secrets:
+  # The tunnel token (one line, eyJ...).  Set it with cloudflared-set-token.sh.
+  # 0644 inside a 0700 directory: only `media` can reach it on the host, and
+  # cloudflared's uid 65532 can read it inside the container.
+  cloudflared_token:
+    file: ./cloudflared-conf/tunnel-token

@@ -1,0 +1,16 @@
+[Unit]
+Description=Run ProtonVPN NAT-PMP renewal every 25 seconds
+
+[Timer]
+# OnActiveSec anchors to timer start, so it fires no matter how late the
+# timer comes up after boot (OnBootSec wedged when its elapse point had
+# already passed before the unit started).
+OnActiveSec=20s
+# OnUnitInactiveSec anchors to the service *finishing* — including a failed
+# run — so one failure can't break the chain like OnUnitActiveSec did.
+OnUnitInactiveSec=25s
+AccuracySec=1s
+Unit=proton-portforward.service
+
+[Install]
+WantedBy=timers.target
