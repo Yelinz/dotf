@@ -142,7 +142,7 @@ get copied first. If the md0 part is unrecoverable:
    export RESTIC_REPOSITORY=/media/media/Elements      # wherever the Elements is mounted
    restic snapshots --latest 3                          # asks for the password
    restic restore latest --target /home/restore         # creates /home/restore/userdata/...
-   mv /home/restore/userdata/immich-images /home/media/Bilder
+   rsync -a /home/restore/userdata/immich-images/ /home/media/Bilder/
    rsync -a /home/restore/userdata/container-confs/ /home/media/tools/
    ```
    The Immich DB is on the SSD. If that were lost too, `Bilder/backups/immich-db-backup-*.sql.gz`
